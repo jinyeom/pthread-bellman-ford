@@ -16,6 +16,6 @@ void BellmanFord::Run(bool parallel) {
     if (parallel) {
 
     } else {
-
+        
     }
 }
