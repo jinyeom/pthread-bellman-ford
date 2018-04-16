@@ -111,6 +111,7 @@ int main(int argc, char* argv[]) {
         clock_gettime(CLOCK_MONOTONIC_RAW, &tick);
         // ---------------- experiment below ----------------
 
+        // this loop has to stay serial
         for (int n = 0; n < num_nodes - 1; ++n) {
             for (int i = 0; i < num_threads; ++i) {
                 // create threads 0, 1, 2, ..., numThreads (round robin)
