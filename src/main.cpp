@@ -32,15 +32,14 @@ void Usage(char *prog) {
 
 void UpdateDistance(const graph::node_t& u, const graph::node_t& v, const graph::edge_data_t& w) {
     bool done = false;
-    while (!done) {    
-        auto distu = distance[u].load();
-        auto distv = distance[v].load();
-        graph::edge_data_t updated = distu + w;
-        if (distu != INF && distv > updated) {
-            done = distance[v].compare_exchange_weak(distv, updated);
+    while (!done) {
+        auto dist_old = distance[v].load();
+        auto dist_new = distance[u].load() + w;
+        if (dist_new > dist_old) {
+            done = distance[v].compare_exchange_weak(dist_old, dist_new);
         } else {
             done = true;
-	}
+        }
     }
 }
 
@@ -53,7 +52,7 @@ void* Relax(void *thread_id_ptr) {
 
     	    // ---------------- critical section ----------------
 
-	    UpdateDistance(u, v, w);
+            UpdateDistance(u, v, w);
 
     	    // --------------------------------------------------
     	}
