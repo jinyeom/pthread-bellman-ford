@@ -34,8 +34,9 @@ void UpdateDistance(const graph::node_t& u, const graph::node_t& v, const graph:
     bool done = false;
     while (!done) {
         auto dist_old = distance[v].load();
-        auto dist_new = distance[u].load() + w;
-        if (dist_new > dist_old) {
+	auto distu = distance[u].load();
+        auto dist_new = distu + w;
+        if (distu != INF && dist_new < dist_old) {
             done = distance[v].compare_exchange_weak(dist_old, dist_new);
         } else {
             done = true;
