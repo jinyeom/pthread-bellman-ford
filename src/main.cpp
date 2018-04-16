@@ -30,28 +30,33 @@ void Usage(char *prog) {
     std::cout << "usage: " << prog << " -f filename -s src_id [-p num_threads]" << std::endl;
 }
 
-void UpdateDistance(const graph::node_t& u) {
-    auto distu = distance[u].load();
-    for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
-        graph::node_t v = g.get_edge_dst(e);
-        graph::edge_data_t w = g.get_edge_data(e);
-
-        // ---------------- critical section ----------------
-
+void UpdateDistance(const graph::node_t& u, const graph::node_t& v, const graph::edge_data_t& w) {
+    bool done = false;
+    while (!done) {    
+        auto distu = distance[u].load();
         auto distv = distance[v].load();
         graph::edge_data_t updated = distu + w;
         if (distu != INF && distv > updated) {
-            while (!distance[v].compare_exchange_weak(distv, updated));
-        }
-
-        // --------------------------------------------------
+            done = distance[v].compare_exchange_weak(distv, updated);
+        } else {
+            done = true;
+	}
     }
 }
 
 void* Relax(void *thread_id_ptr) {
     graph::node_t tid = *(graph::node_t*)thread_id_ptr;
     for (graph::node_t u = tid; u < g.end(); u += num_threads) {
-        UpdateDistance(u);
+    	for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
+    	    graph::node_t v = g.get_edge_dst(e);
+    	    graph::edge_data_t w = g.get_edge_data(e);
+
+    	    // ---------------- critical section ----------------
+
+	    UpdateDistance(u, v, w);
+
+    	    // --------------------------------------------------
+    	}
     }
 }
 
