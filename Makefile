@@ -2,7 +2,7 @@
 CC=g++
 CFLAGS=-std=c++11
 LDFLAGS=-lpthread
-SOURCES=./src/main.cpp ./src/graph.cpp ./src/bellman_ford.cpp
+SOURCES=./src/main.cpp ./src/graph.cpp
 EXECUTABLE=bellman-ford
 
 all: $(EXECUTABLE)

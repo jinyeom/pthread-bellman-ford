@@ -10,7 +10,7 @@ public:
 
 private:
     graph* graph_;
-    std::vector<double>
+    double distance[];
 };
 
 #endif
