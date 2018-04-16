@@ -4,6 +4,7 @@
 #include <limits>
 #include <fstream>
 #include <sstream>
+#include <atomic>
 
 #include <time.h>
 #include <pthread.h>
@@ -12,6 +13,7 @@
 
 #define MAX_THREADS 512
 #define BUFF_SIZE 100000
+#define INF std::numeric_limits<int>::max()
 
 int num_threads = 0;
 pthread_t handles[MAX_THREADS];
@@ -22,34 +24,34 @@ graph g;
 
 // NOTE: declare the global array with a buffer; if the argument graph has more nodes than the
 // buffer size, reallocate the array with the argument number of nodes.
-graph::edge_data_t* distance = new graph::edge_data_t[BUFF_SIZE];
+std::atomic<graph::edge_data_t>* distance = new std::atomic<graph::edge_data_t>[BUFF_SIZE];
 
 void Usage(char *prog) {
     std::cout << "usage: " << prog << " -f filename -s src_id [-p num_threads]" << std::endl;
 }
 
-void* relax(void *thread_id_ptr) {
+void UpdateDistance(const graph::node_t& u) {
+    auto distu = distance[u].load();
+    for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
+        graph::node_t v = g.get_edge_dst(e);
+        graph::edge_data_t w = g.get_edge_data(e);
+
+        // ---------------- critical section ----------------
+
+        auto distv = distance[v].load();
+        graph::edge_data_t updated = distu + w;
+        if (distu != INF && distv > updated) {
+            while (!distance[v].compare_exchange_weak(distv, updated));
+        }
+
+        // --------------------------------------------------
+    }
+}
+
+void* Relax(void *thread_id_ptr) {
     graph::node_t tid = *(graph::node_t*)thread_id_ptr;
     for (graph::node_t u = tid; u < g.end(); u += num_threads) {
-        // since distance[u] is unique to this thread, it can be read only once per loop;
-        graph::edge_data_t old_dist = distance[u];
-        for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
-            graph::node_t v = g.get_edge_dst(e);
-            graph::edge_data_t w = g.get_edge_data(e);
-
-            graph::edge_data_t updated = old_dist + w;
-            if (old_dist == std::numeric_limits<int>::max()) {
-                updated = old_dist;
-            }
-
-            // ---------------- critical section ----------------
-
-            if (distance[v] > updated) {
-                distance[v] = updated;
-            }
-
-            // --------------------------------------------------
-        }
+        UpdateDistance(u);
     }
 }
 
@@ -90,11 +92,11 @@ int main(int argc, char* argv[]) {
     int num_nodes = (int)g.size_nodes();
     if (num_nodes > BUFF_SIZE) {
         delete [] distance;
-        distance = new graph::edge_data_t[num_nodes];
+        distance = new std::atomic<graph::edge_data_t>[num_nodes];
     }
 
     for (int i = 0; i < num_nodes; ++i) {
-        distance[i] = std::numeric_limits<int>::max();
+        distance[i] = INF;
     }
     distance[src - 1] = 0;
 
@@ -105,14 +107,16 @@ int main(int argc, char* argv[]) {
         clock_gettime(CLOCK_MONOTONIC_RAW, &tick);
         // ---------------- experiment below ----------------
 
-        for (int i = 0; i < num_threads; ++i) {
-            // create threads 0, 1, 2, ..., numThreads (round robin)
-            short_names[i] = i;
-            pthread_create(&handles[i], &attr, relax, &short_names[i]);
-        }
-        // join with threads when they're done
-        for (int i = 0; i < num_threads; ++i) {
-            pthread_join(handles[i], NULL);
+        for (int n = 0; n < num_nodes - 1; ++n) {
+            for (int i = 0; i < num_threads; ++i) {
+                // create threads 0, 1, 2, ..., numThreads (round robin)
+                short_names[i] = i;
+                pthread_create(&handles[i], &attr, Relax, &short_names[i]);
+            }
+            // join with threads when they're done
+            for (int i = 0; i < num_threads; ++i) {
+                pthread_join(handles[i], NULL);
+            }
         }
 
         // --------------------------------------------------
@@ -120,6 +124,15 @@ int main(int argc, char* argv[]) {
         execTime = 1000000000 * (tock.tv_sec - tick.tv_sec) + tock.tv_nsec - tick.tv_nsec;
         std::cout << "elapsed process CPU time = " << (long long unsigned int)execTime << " nanoseconds\n";
         result_filename << filename << "_parallel.txt";
+
+        // export result to a text file
+        f.open(result_filename.str());
+        for (int i = 0; i < num_nodes; ++i) {
+            std::string dist_str = std::to_string(distance[i]);
+            if (distance[i] == INF) dist_str = "INF";
+            f << i + 1 << " " << dist_str << std::endl;
+        }
+        f.close();
     } else {
         std::cout << "solving SSSP from node " << (int)src << " via serial Bellman-Ford algorithm..." << std::endl;
         // main computation for SSSP; measure runtime here
@@ -128,16 +141,13 @@ int main(int argc, char* argv[]) {
 
         for (int i = 0; i < num_nodes - 1; ++i) {
             for (graph::node_t u = g.begin(); u < g.end(); u++) {
+                graph::edge_data_t dist = distance[u];
                 for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
                     graph::node_t v = g.get_edge_dst(e);
                     graph::edge_data_t w = g.get_edge_data(e);
                     // take care of cases with infinity
-                    graph::edge_data_t updated = distance[u] + w;
-                    if (distance[u] == std::numeric_limits<int>::max()) {
-                        updated = distance[u];
-                    }
-                    // update the distance
-                    if (distance[v] > updated) {
+                    graph::edge_data_t updated = dist + w;
+                    if (dist != INF && distance[v] > updated) {
                         distance[v] = updated;
                     }
                 }
@@ -149,16 +159,16 @@ int main(int argc, char* argv[]) {
         execTime = 1000000000 * (tock.tv_sec - tick.tv_sec) + tock.tv_nsec - tick.tv_nsec;
         std::cout << "elapsed process CPU time = " << (long long unsigned int)execTime << " nanoseconds\n";
         result_filename << filename << ".txt";
-    }
 
-    // export result to a text file
-    f.open(result_filename.str());
-    for (int i = 0; i < num_nodes; ++i) {
-        std::string dist_str = std::to_string(distance[i]);
-        if (distance[i] == std::numeric_limits<int>::max()) dist_str = "INF";
-        f << i + 1 << " " << dist_str << std::endl;
+        // export result to a text file
+        f.open(result_filename.str());
+        for (int i = 0; i < num_nodes; ++i) {
+            std::string dist_str = std::to_string(distance[i]);
+            if (distance[i] == INF) dist_str = "INF";
+            f << i + 1 << " " << dist_str << std::endl;
+        }
+        f.close();
     }
-    f.close();
 
     // NOTE: normally, the algorithm checks for negative cycles, but for the sake of saving time,
     // we'll just assume there aren't any, assuming all edges have positive weights.
