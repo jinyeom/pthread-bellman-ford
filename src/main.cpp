@@ -34,7 +34,7 @@ void UpdateDistance(const graph::node_t& u, const graph::node_t& v, const graph:
     bool done = false;
     while (!done) {
         auto dist_old = distance[v].load();
-	auto distu = distance[u].load();
+        auto distu = distance[u].load();
         auto dist_new = distu + w;
         if (distu != INF && dist_new < dist_old) {
             done = distance[v].compare_exchange_weak(dist_old, dist_new);
@@ -113,16 +113,14 @@ int main(int argc, char* argv[]) {
         // ---------------- experiment below ----------------
 
         // this loop has to stay serial
-        for (int n = 0; n < num_nodes - 1; ++n) {
-            for (int i = 0; i < num_threads; ++i) {
-                // create threads 0, 1, 2, ..., numThreads (round robin)
-                short_names[i] = i;
-                pthread_create(&handles[i], &attr, Relax, &short_names[i]);
-            }
-            // join with threads when they're done
-            for (int i = 0; i < num_threads; ++i) {
-                pthread_join(handles[i], NULL);
-            }
+        for (int i = 0; i < num_threads; ++i) {
+            // create threads 0, 1, 2, ..., numThreads (round robin)
+            short_names[i] = i;
+            pthread_create(&handles[i], &attr, Relax, &short_names[i]);
+        }
+        // join with threads when they're done
+        for (int i = 0; i < num_threads; ++i) {
+            pthread_join(handles[i], NULL);
         }
 
         // --------------------------------------------------
@@ -145,17 +143,15 @@ int main(int argc, char* argv[]) {
         clock_gettime(CLOCK_MONOTONIC_RAW, &tick);
         // ---------------- experiment below ----------------
 
-        for (int i = 0; i < num_nodes - 1; ++i) {
-            for (graph::node_t u = g.begin(); u < g.end(); u++) {
-                graph::edge_data_t dist = distance[u];
-                for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
-                    graph::node_t v = g.get_edge_dst(e);
-                    graph::edge_data_t w = g.get_edge_data(e);
-                    // take care of cases with infinity
-                    graph::edge_data_t updated = dist + w;
-                    if (dist != INF && distance[v] > updated) {
-                        distance[v] = updated;
-                    }
+        for (graph::node_t u = g.begin(); u < g.end(); u++) {
+            graph::edge_data_t dist = distance[u];
+            for (graph::edge_t e = g.edge_begin(u); e < g.edge_end(u); e++) {
+                graph::node_t v = g.get_edge_dst(e);
+                graph::edge_data_t w = g.get_edge_data(e);
+                // take care of cases with infinity
+                graph::edge_data_t updated = dist + w;
+                if (dist != INF && distance[v] > updated) {
+                    distance[v] = updated;
                 }
             }
         }
