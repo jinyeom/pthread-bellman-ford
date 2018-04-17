@@ -30,7 +30,7 @@ def plot_nthreads_time(prog, filename, src, title, show=False, save=False):
     plt.xlabel("number of threads")
     plt.ylabel("runtime (nanoseconds)")
     plt.axhline(y=serial_runtime, color="r", label="serial")
-    plt.plot(n_threads, speedups, marker="o")
+    plt.plot(n_threads, runtimes, marker="o")
     plt.legend()
     if show:
         print("Displaying the plot...")
