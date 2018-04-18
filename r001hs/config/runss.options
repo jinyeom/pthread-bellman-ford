@@ -14,8 +14,8 @@
 --
 ./bellman-ford
 -f
-/tmp/jinyeom/roadFLA.dimacs
+/tmp/jinyeom/rmat22.dimacs
 -s
-316607
+1
 -p
 8

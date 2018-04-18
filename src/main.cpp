@@ -9,6 +9,8 @@
 #include <time.h>
 #include <pthread.h>
 
+#include "ittnotify.h" // for VTune
+
 #include "../include/graph.h"
 
 #define MAX_THREADS 512
@@ -61,6 +63,8 @@ void* Relax(void *thread_id_ptr) {
 }
 
 int main(int argc, char* argv[]) {
+    __itt_pause();
+    
     std::string filename;               // graph file name
     graph::node_t src;                  // source node ID
     bool parallel = false;              // run in parallel if true
@@ -109,8 +113,9 @@ int main(int argc, char* argv[]) {
     if (parallel) {
         std::cout << "solving SSSP from node " << (int)src << " via parallel Bellman-Ford algorithm..." << std::endl;
         // main computation for SSSP; measure runtime here
-        clock_gettime(CLOCK_MONOTONIC_RAW, &tick);
-        // ---------------- experiment below ----------------
+ 	clock_gettime(CLOCK_MONOTONIC_RAW, &tick);
+	// ---------------- experiment below ----------------
+        __itt_resume(); // for VTune
 
         // this loop has to stay serial
         for (int i = 0; i < num_threads; ++i) {
@@ -123,6 +128,7 @@ int main(int argc, char* argv[]) {
             pthread_join(handles[i], NULL);
         }
 
+        __itt_pause();
         // --------------------------------------------------
         clock_gettime(CLOCK_MONOTONIC_RAW, &tock);
         execTime = 1000000000 * (tock.tv_sec - tick.tv_sec) + tock.tv_nsec - tick.tv_nsec;
